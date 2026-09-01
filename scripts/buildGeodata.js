@@ -605,7 +605,7 @@ function cleanSvgPath(pathStr) {
 }
 
 // 3. GENERATE US STATES
-console.log('Generating US States dataset...');
+console.log('Generating high-resolution US States dataset from 10m US Census Atlas...');
 const usData = JSON.parse(fs.readFileSync(path.join(__dirname, '../node_modules/us-atlas/states-10m.json'), 'utf8'));
 const usFeatures = topojson.feature(usData, usData.objects.states).features;
 
@@ -618,8 +618,8 @@ for (const [stateName, meta] of Object.entries(US_STATE_METADATA)) {
     continue;
   }
 
-  // Project individual state geometry centered and fitted to 500x500 box with 40px margins
-  const projection = d3Geo.geoMercator().fitExtent([[40, 40], [460, 460]], feat);
+  // Project individual state geometry centered and fitted to 500x500 box with 25px margins for maximum detail
+  const projection = d3Geo.geoMercator().fitExtent([[25, 25], [475, 475]], feat);
   const pathGenerator = d3Geo.geoPath(projection);
   const rawPath = pathGenerator(feat);
   const svgPath = cleanSvgPath(rawPath);
@@ -644,29 +644,28 @@ for (const [stateName, meta] of Object.entries(US_STATE_METADATA)) {
   });
 }
 
-console.log(`Generated ${statesList.length} US States.`);
+console.log(`Generated ${statesList.length} high-resolution US States.`);
 
-// 4. GENERATE WORLD COUNTRIES
-console.log('Generating World Countries dataset...');
-const worldData = JSON.parse(fs.readFileSync(path.join(__dirname, '../node_modules/world-atlas/countries-110m.json'), 'utf8'));
+// 4. GENERATE WORLD COUNTRIES (using 10m high-resolution Natural Earth)
+console.log('Generating high-resolution World Countries dataset from 10m Natural Earth Atlas...');
+const world10mData = JSON.parse(fs.readFileSync(path.join(__dirname, '../node_modules/world-atlas/countries-10m.json'), 'utf8'));
 const world50mData = JSON.parse(fs.readFileSync(path.join(__dirname, '../node_modules/world-atlas/countries-50m.json'), 'utf8'));
 
-const world110Features = topojson.feature(worldData, worldData.objects.countries).features;
+const world10mFeatures = topojson.feature(world10mData, world10mData.objects.countries).features;
 const world50Features = topojson.feature(world50mData, world50mData.objects.countries).features;
 
 const countriesList = [];
 
 for (const [atlasName, meta] of Object.entries(COUNTRY_INFO)) {
-  // Find feature in 110m, or fallback to 50m
-  let feat = world110Features.find(f => f.properties && f.properties.name === atlasName);
+  // Find feature in 10m first, then fallback to 50m
+  let feat = world10mFeatures.find(f => f.properties && f.properties.name === atlasName);
   if (!feat) {
     feat = world50Features.find(f => f.properties && f.properties.name === atlasName);
   }
 
   if (!feat) {
-    // Try matching by canonical name
     const canonicalName = meta.name || atlasName;
-    feat = world110Features.find(f => f.properties && f.properties.name === canonicalName) ||
+    feat = world10mFeatures.find(f => f.properties && f.properties.name === canonicalName) ||
            world50Features.find(f => f.properties && f.properties.name === canonicalName);
   }
 
@@ -678,8 +677,8 @@ for (const [atlasName, meta] of Object.entries(COUNTRY_INFO)) {
   const countryDisplayName = meta.name || atlasName;
   const id = countryDisplayName.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-  // Project country geometry centered and fitted to 500x500 box
-  const projection = d3Geo.geoMercator().fitExtent([[40, 40], [460, 460]], feat);
+  // Project country geometry centered and fitted to 500x500 box with 25px margins
+  const projection = d3Geo.geoMercator().fitExtent([[25, 25], [475, 475]], feat);
   const pathGenerator = d3Geo.geoPath(projection);
   const rawPath = pathGenerator(feat);
   const svgPath = cleanSvgPath(rawPath);
@@ -703,7 +702,7 @@ for (const [atlasName, meta] of Object.entries(COUNTRY_INFO)) {
   });
 }
 
-console.log(`Generated ${countriesList.length} World Countries.`);
+console.log(`Generated ${countriesList.length} high-resolution World Countries.`);
 
 // Sort alphabetically by name
 statesList.sort((a, b) => a.name.localeCompare(b.name));
