@@ -4,6 +4,8 @@
 
 A client-side geography silhouette guessing game built with React, Vite, JavaScript, Tailwind CSS, Lucide React, and LocalStorage.
 
+![Shaple](public/shaple.png)
+
 ---
 
 ## 🚀 Features
