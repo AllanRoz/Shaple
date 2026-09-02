@@ -1,6 +1,8 @@
-import React, { useEffect } from 'react';
-import { ArrowRight, CheckCircle2, XCircle, Sparkles, Award, Info } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { ArrowRight, CheckCircle2, XCircle, Sparkles, Award, Info, Timer } from 'lucide-react';
 import confetti from 'canvas-confetti';
+
+const AUTO_ADVANCE_DURATION_MS = 5000;
 
 export default function AnswerFeedback({
   place,
@@ -13,6 +15,15 @@ export default function AnswerFeedback({
   isLastQuestion = false,
   enableAnimations = true
 }) {
+  const [timeLeftMs, setTimeLeftMs] = useState(AUTO_ADVANCE_DURATION_MS);
+  const nextTriggeredRef = useRef(false);
+
+  const handleNext = () => {
+    if (nextTriggeredRef.current) return;
+    nextTriggeredRef.current = true;
+    onNext();
+  };
+
   useEffect(() => {
     if (isCorrect && enableAnimations) {
       try {
@@ -26,7 +37,47 @@ export default function AnswerFeedback({
     }
   }, [isCorrect, enableAnimations]);
 
+  // 5-second countdown timer when answer is correct
+  useEffect(() => {
+    if (!isCorrect) return;
+
+    nextTriggeredRef.current = false;
+    setTimeLeftMs(AUTO_ADVANCE_DURATION_MS);
+
+    const startTime = Date.now();
+    const endTime = startTime + AUTO_ADVANCE_DURATION_MS;
+    let animFrameId;
+
+    const tick = () => {
+      const now = Date.now();
+      const remaining = Math.max(0, endTime - now);
+      setTimeLeftMs(remaining);
+
+      if (remaining <= 0) {
+        if (!nextTriggeredRef.current) {
+          nextTriggeredRef.current = true;
+          onNext();
+        }
+      } else {
+        animFrameId = requestAnimationFrame(tick);
+      }
+    };
+
+    animFrameId = requestAnimationFrame(tick);
+
+    return () => {
+      if (animFrameId) {
+        cancelAnimationFrame(animFrameId);
+      }
+    };
+  }, [isCorrect, onNext]);
+
   if (!place) return null;
+
+  const secondsLeft = Math.ceil(timeLeftMs / 1000);
+  const progressPercent = isCorrect
+    ? Math.max(0, Math.min(100, (timeLeftMs / AUTO_ADVANCE_DURATION_MS) * 100))
+    : 0;
 
   return (
     <div className="w-full max-w-md mx-auto rounded-3xl bg-white dark:bg-slate-800 p-5 sm:p-6 border-2 border-slate-200 dark:border-slate-700 shadow-xl space-y-4 animate-scale-in text-center">
@@ -83,15 +134,44 @@ export default function AnswerFeedback({
         </div>
       )}
 
+      {/* 5-Second Timer Bar Indicator (Active on Correct Answer) */}
+      {isCorrect && (
+        <div className="space-y-1.5 pt-1 text-left">
+          <div className="flex items-center justify-between text-xs font-semibold px-0.5">
+            <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
+              <Timer className="w-3.5 h-3.5 animate-pulse" />
+              <span>{isLastQuestion ? 'Finishing in' : 'Next question in'} {secondsLeft}s...</span>
+            </span>
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+              Auto-advancing
+            </span>
+          </div>
+
+          {/* Bar track and animated progress bar (decreasing right-to-left towards 0%) */}
+          <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-700/70 rounded-full overflow-hidden p-0.5 border border-slate-200/80 dark:border-slate-700/80">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-sky-400 rounded-full transition-all duration-75 ease-linear shadow-sm"
+              style={{
+                width: `${progressPercent}%`,
+                transformOrigin: 'left center'
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Next Shape Button */}
       <button
         type="button"
-        onClick={onNext}
+        onClick={handleNext}
         autoFocus
-        className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-brand-600 to-sky-500 hover:from-brand-500 hover:to-sky-400 active:scale-98 text-white font-bold text-base flex items-center justify-center gap-2 shadow-lg shadow-brand-500/25 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-brand-500"
+        className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-brand-600 to-sky-500 hover:from-brand-500 hover:to-sky-400 active:scale-98 text-white font-bold text-base flex items-center justify-center gap-2 shadow-lg shadow-brand-500/25 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-brand-500 group"
       >
-        <span>{isLastQuestion ? 'View Results' : 'Next Shape'}</span>
-        <ArrowRight className="w-5 h-5" />
+        <span>
+          {isLastQuestion ? 'View Results' : 'Next Shape'}
+          {isCorrect && ` (${secondsLeft}s)`}
+        </span>
+        <ArrowRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
       </button>
 
     </div>
