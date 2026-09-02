@@ -204,9 +204,10 @@ export default function ShapeDisplay({
           <path
             d={place.svgPath}
             className={`${fillColor} ${strokeColor} transition-colors duration-300`}
-            strokeWidth="1.2"
-            strokeLinejoin="round"
-            strokeLinecap="round"
+            strokeWidth="0.75"
+            strokeLinejoin="miter"
+            strokeMiterlimit="3"
+            strokeLinecap="butt"
             vectorEffect="non-scaling-stroke"
             fillRule="evenodd"
           />

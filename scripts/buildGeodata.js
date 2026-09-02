@@ -598,12 +598,66 @@ const COUNTRY_INFO = {
   'Zimbabwe': { code: 'ZW', flagEmoji: '🇿🇼', continent: 'Africa', capital: 'Harare', difficulty: 'normal', aliases: ['Republic of Zimbabwe', 'Rhodesia'], funFact: 'Zimbabwe is named after the ancient stone ruins of Great Zimbabwe, built between the 11th and 15th centuries.' }
 };
 
-// Helper: simplify SVG path coordinate decimals and remove redundant sub-pixel vertices
+// Helper: simplify SVG path coordinate decimals and remove redundant sub-pixel vertices with high 2-decimal precision
 function cleanSvgPath(pathStr) {
   if (!pathStr) return '';
   return pathStr
-    .replace(/(\d+\.\d{1})\d+/g, '$1')
+    .replace(/(\d+\.\d{2})\d+/g, '$1')
     .replace(/(?:[ML])(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?=(?:[ML])\1,\2)/g, '');
+}
+
+// Helper: Filter distant overseas territories/colonies for clean silhouette display
+function getCleanFeature(feat, displayName) {
+  if (!feat || feat.geometry.type === 'Polygon') return feat;
+  if (feat.geometry.type !== 'MultiPolygon') return feat;
+
+  const polygons = feat.geometry.coordinates.map((coords, index) => {
+    const subFeat = { type: 'Feature', geometry: { type: 'Polygon', coordinates: coords } };
+    return {
+      index,
+      coords,
+      area: d3Geo.geoArea(subFeat),
+      centroid: d3Geo.geoCentroid(subFeat)
+    };
+  });
+
+  polygons.sort((a, b) => b.area - a.area);
+  const main = polygons[0];
+
+  // Specific maximum distance threshold (in degrees) from main landmass centroid
+  let maxDistDeg = 15;
+  const name = displayName || feat.properties?.name || '';
+  if (name === 'United States' || name === 'United States of America') maxDistDeg = 26; // Contiguous US
+  if (name === 'Indonesia') maxDistDeg = 36;
+  if (name === 'Russia') maxDistDeg = 90;
+  if (name === 'Canada') maxDistDeg = 45;
+  if (name === 'Chile') maxDistDeg = 32;
+  if (name === 'Japan') maxDistDeg = 25;
+  if (name === 'Philippines') maxDistDeg = 20;
+  if (name === 'Malaysia') maxDistDeg = 20;
+  if (name === 'Greece') maxDistDeg = 15;
+  if (name === 'Norway') maxDistDeg = 15; // Excludes Svalbard at lat 78
+  if (name === 'France') maxDistDeg = 10; // Keeps mainland + Corsica, excludes South American & Indian Ocean territories
+  if (name === 'Spain') maxDistDeg = 10; // Keeps mainland + Balearics, excludes Canary Is.
+  if (name === 'Portugal') maxDistDeg = 8; // Keeps mainland Portugal
+  if (name === 'Netherlands') maxDistDeg = 5; // Excludes Caribbean territories
+  if (name === 'Denmark') maxDistDeg = 6; // Excludes Greenland/Faroe
+  if (name === 'New Zealand') maxDistDeg = 12; // North + South Island, excludes Chatham Is.
+
+  const filtered = polygons.filter(p => {
+    const dLon = Math.abs(p.centroid[0] - main.centroid[0]);
+    const dLat = Math.abs(p.centroid[1] - main.centroid[1]);
+    const dist = Math.sqrt(dLon * dLon + dLat * dLat);
+    return dist <= maxDistDeg;
+  });
+
+  return {
+    ...feat,
+    geometry: {
+      type: filtered.length === 1 ? 'Polygon' : 'MultiPolygon',
+      coordinates: filtered.length === 1 ? filtered[0].coords : filtered.map(p => p.coords)
+    }
+  };
 }
 
 // 3. GENERATE US STATES
@@ -620,8 +674,9 @@ for (const [stateName, meta] of Object.entries(US_STATE_METADATA)) {
     continue;
   }
 
-  // Project individual state geometry centered and fitted to 500x500 box with 25px margins for maximum detail
-  const projection = d3Geo.geoMercator().fitExtent([[25, 25], [475, 475]], feat);
+  // Calculate centroid and project with central meridian rotation for true shape accuracy
+  const centroid = d3Geo.geoCentroid(feat);
+  const projection = d3Geo.geoMercator().rotate([-centroid[0], 0]).fitExtent([[25, 25], [475, 475]], feat);
   const pathGenerator = d3Geo.geoPath(projection);
   const rawPath = pathGenerator(feat);
   const svgPath = cleanSvgPath(rawPath);
@@ -679,10 +734,12 @@ for (const [atlasName, meta] of Object.entries(COUNTRY_INFO)) {
   const countryDisplayName = meta.name || atlasName;
   const id = countryDisplayName.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-  // Project country geometry centered and fitted to 500x500 box with 25px margins
-  const projection = d3Geo.geoMercator().fitExtent([[25, 25], [475, 475]], feat);
+  // Clean distant colonies/territories and center on central meridian
+  const cleanFeat = getCleanFeature(feat, countryDisplayName);
+  const centroid = d3Geo.geoCentroid(cleanFeat);
+  const projection = d3Geo.geoMercator().rotate([-centroid[0], 0]).fitExtent([[25, 25], [475, 475]], cleanFeat);
   const pathGenerator = d3Geo.geoPath(projection);
-  const rawPath = pathGenerator(feat);
+  const rawPath = pathGenerator(cleanFeat);
   const svgPath = cleanSvgPath(rawPath);
 
   const aliases = [countryDisplayName, atlasName, meta.code, ...(meta.aliases || [])];
@@ -729,3 +786,4 @@ fs.writeFileSync(
 );
 
 console.log('Successfully written data files to src/data/states.js and src/data/countries.js!');
+
