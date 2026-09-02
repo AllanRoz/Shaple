@@ -598,10 +598,12 @@ const COUNTRY_INFO = {
   'Zimbabwe': { code: 'ZW', flagEmoji: '🇿🇼', continent: 'Africa', capital: 'Harare', difficulty: 'normal', aliases: ['Republic of Zimbabwe', 'Rhodesia'], funFact: 'Zimbabwe is named after the ancient stone ruins of Great Zimbabwe, built between the 11th and 15th centuries.' }
 };
 
-// Helper: simplify SVG path coordinate decimals
+// Helper: simplify SVG path coordinate decimals and remove redundant sub-pixel vertices
 function cleanSvgPath(pathStr) {
   if (!pathStr) return '';
-  return pathStr.replace(/(\d+\.\d{2})\d+/g, '$1');
+  return pathStr
+    .replace(/(\d+\.\d{1})\d+/g, '$1')
+    .replace(/(?:[ML])(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?=(?:[ML])\1,\2)/g, '');
 }
 
 // 3. GENERATE US STATES
